@@ -1,93 +1,169 @@
-# seats that are being booked
-taken_seats = {""}
+import sqlite3
+import random
+import string
 
-# initial seating dictionary
-seats = {f"{row}{col}": "F" for row in range(1, 81) for col in "ABCDEF"}
+# Connection to the db
+conn = sqlite3.connect('apache_airlines.db')
+cursor = conn.cursor()
 
-# Storage area seats
-storage_seats = {"77D", "77E", "77F", "78D", "78E", "78F"}
+# Create bookings table with seat uniqueness constraint
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS bookings (
+        booking_ref TEXT PRIMARY KEY,
+        passport TEXT,
+        first_name TEXT,
+        last_name TEXT,
+        seat TEXT UNIQUE,  -- Prevents double bookings
+        price INTEGER  
+    )
+''')
+conn.commit()
 
-
-
-# Seat pricing configuration
 SEAT_PRICES = {
-    "window": 50,   # Columns A and F
-    "aisle": 40,    # Columns C and D 
-    "middle": 30    # Columns B and E
+    "window": 50,   # Columns A/F
+    "aisle": 40,    # Columns C/D
+    "middle": 30    # Columns B/E
 }
 
-#Function to determine the seat type given its letter
-def get_seat_type(seat_number):
-    column = seat_number[-1]  # Extracts column letter (like "1A" → "A")
-    if column in ("A", "F"):
-        return "window"
-    elif column in ("C", "D"):
-        return "aisle"
-    elif column in ("B", "E"):
-        return "middle"
-    else:
-        return None  
-    
-# Function that checks whether a seat is avaialable or not 
+storage_seats = {"77D", "77E", "77F", "78D", "78E", "78F"}
+seats = {f"{row}{col}" for row in range(1, 81) for col in "ABCDEF"}
+
+
+# Function that determines seat type based on column letter
+def get_seat_type(seat):
+    col = seat[-1]
+    return "window" if col in ("A", "F") else \
+           "aisle" if col in ("C", "D") else \
+           "middle" if col in ("B", "E") else None
+
+# Function that generates unique 8-character alphanumeric references.
+
+def generate_booking_ref():
+    while True:
+        ref = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+        cursor.execute('SELECT 1 FROM bookings WHERE booking_ref = ?', (ref,))
+        if not cursor.fetchone():
+            return ref
+
+
+# Function that checks whether a seat is booked or not.
 def check_availability():
     while True:
-        seat = input("\nEnter seat number (e.g., 1A): ").upper()
-        if seat in seats:
-            if seat in taken_seats:
-                print(f"Seat {seat}: Reserved")
-            elif seat in storage_seats:
-                print(f"Seat {seat}: Storage (Not Bookable)")
-            else:
-                seat_type = get_seat_type(seat)
-                price = SEAT_PRICES[seat_type]
-                print(f"Seat {seat}: Available ({seat_type.capitalize()} Seat - ${price})")
+        seat = input("\nEnter seat (e.g., 1A): ").upper()
+        if seat not in seats:
+            print("Invalid seat! Use format like 1A-80F.")
+            continue
+        
+        if seat in storage_seats:
+            print(f"Seat {seat}: Storage Area (Not Bookable)")
             break
+        
+        # Check database for booking
+        cursor.execute('SELECT 1 FROM bookings WHERE seat = ?', (seat,))
+        if cursor.fetchone():
+            print(f"Seat {seat}: Reserved")
         else:
-            print("Invalid seat! Format must be 1A-80F. Try again.")
-            
-# Function that allows the user to book a seat as long as the plane isn't full yet.
+            seat_type = get_seat_type(seat)
+            price = SEAT_PRICES[seat_type]
+            print(f"Seat {seat}: Available ({seat_type} seat - ${price})")
+        break
+
+# Function to book a seat, it checks if the seat is booked in the database.
 def book_seat():
-    total_seats = len(seats) - len(storage_seats)  # Total bookable seats
-    if len(taken_seats) >= total_seats:
-        print("\n Airplane is fully booked. No seats available.")
-        return  
+    # Check if airplane is fully booked
+    cursor.execute('SELECT COUNT(*) FROM bookings')
+    booked_count = cursor.fetchone()[0]
+    max_capacity = len(seats) - len(storage_seats)  # Total bookable seats
+    
+    if booked_count >= max_capacity:
+        print("\nAirplane is fully booked. No seats available.")
+        return  # Exit function early
+
+    # Proceed with booking if seats are available
     while True:
         seat = input("\nEnter seat to book (Window: 50$, Aisle: 40$, Middle: 30$) (eg. 1F): ").upper()
+        
+        # Validate seat
         if seat not in seats:
-            print("Invalid seat number. Try again.")
+            print("Invalid seat number.")
             continue
         if seat in storage_seats:
-            print("Cannot book storage area (S). Try again.")
+            print("Cannot book storage area.")
             continue
-        if seat in taken_seats:
-            print("Seat already booked. Try again.")
-            continue
-
-        seat_type = get_seat_type(seat)
-        price = SEAT_PRICES[seat_type]
-        confirm = input(f"Price: ${price} ({seat_type} seat). Confirm? (Y/N): ").upper()
         
-        if confirm == "Y":
-            taken_seats.add(seat)
-            print(f"Booked {seat} for ${price}!")
-            break
-        else:
-            print("Booking cancelled.")
-            break
-
-#Function that allows the user to free their seat, effectively canceling their booking
-def free_seat():
-    while True:  # Loop until valid seat freed
-        seat = input("\nEnter seat to free (e.g., 1A): ").upper()
-        if seat not in taken_seats:
-            print("Seat not booked or invalid. Try again.")
+        # Check if already booked
+        cursor.execute('SELECT 1 FROM bookings WHERE seat = ?', (seat,))
+        if cursor.fetchone():
+            print("Seat already booked.")
             continue
-        taken_seats.remove(seat)
-        print(f"Freed {seat}!")
+        
+        # Get passenger details
+        passport = input("Passport number: ").strip()
+        first = input("First name: ").strip().title()
+        last = input("Last name: ").strip().title()
+        price = SEAT_PRICES[get_seat_type(seat)]
+        confirm = input(f"Price: ${price} ({get_seat_type(seat)} seat). Confirm? (Y/N): ").upper()
+        
+        if confirm == "N":
+            break
+        # Generate reference and save to DB
+        ref = generate_booking_ref()
+        cursor.execute('''
+            INSERT INTO bookings 
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (ref, passport, first, last, seat, price))
+        conn.commit()
+        print(f"Booked {seat}! Reference: {ref}")
         break
-    
-# Function that prints the seating plan of the plane.
+        
+
+            
+#Function that frees a seat, ultimately canceling a booking            
+def free_seat():
+    while True:
+        seat = input("\nEnter seat to free: ").upper()
+        
+        # Delete from database
+        cursor.execute('DELETE FROM bookings WHERE seat = ?', (seat,))
+        if cursor.rowcount == 0:
+            print("Seat not booked or invalid.")
+            continue
+        
+        conn.commit()
+        print(f"Freed {seat} successfully.")
+        break
+
+# Function that shows the booking status of a customer, and prints the seating plan
 def show_booking_status():
+    # Get passenger's full name
+    first_name = input("\nEnter your first name: ").strip().title()
+    last_name = input("Enter your last name: ").strip().title()
+    
+    # Query database for bookings
+    cursor.execute('''
+        SELECT booking_ref, seat, price 
+        FROM bookings 
+        WHERE first_name = ? AND last_name = ?
+    ''', (first_name, last_name))
+    bookings = cursor.fetchall()
+    
+    # Display booking information
+    if not bookings:
+        print(f"\nNo bookings found for '{first_name} {last_name}'.")
+    else:
+        print(f"\n{'+++++++++ Your Bookings +++++++++'}")
+        for idx, (ref, seat, price) in enumerate(bookings, 1):
+            print(f"{idx}. Reference: {ref}")
+            print(f"   First Name: {first_name}")
+            print(f"   Last Name:  {last_name}")
+            print(f"   Seat: {seat}")
+            print(f"   Price: ${price}\n")
+    
+    # Display full seat map
+    print("\nCurrent Floor Plan of Burak757:")
+    cursor.execute('SELECT seat FROM bookings')
+    taken_seats = {row[0] for row in cursor.fetchall()}
+    
     for row in range(1, 81):  # Rows 1-80
         row_display = []
         for col in "ABCXDEF":  # Columns A-F with aisle (X)
@@ -107,20 +183,21 @@ def show_booking_status():
             row_display.append(f"{display:<4}")  # Left-aligned, 4 chars
             
         print("".join(row_display))  # Print entire row
-        
-#Function that displays the menu which will be shown after every iteration of the program.
+
+# Menu System that is ran at every iteration 
 def menu():
     print("\n| Apache Airlines Booking System |")
     print("1. Check availability of seat")
     print("2. Book a seat")
     print("3. Free a seat")
     print("4. Show booking status")
-    print("5. Exit program")
-    
-# Main loop
+    print("5. Exit")
+
+#  Main Loop 
 while True:
     menu()
-    choice = input("Select an option (1-5): ")
+    choice = input("Choose option (1-5): ").strip()
+    
     if choice == "1":
         check_availability()
     elif choice == "2":
@@ -131,6 +208,7 @@ while True:
         show_booking_status()
     elif choice == "5":
         print("Exiting Program")
+        conn.close()
         break
     else:
         print("Invalid choice. Try again.")
