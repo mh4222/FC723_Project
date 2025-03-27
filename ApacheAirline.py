@@ -98,41 +98,51 @@ def book_seat():
             continue
         
         # Get passenger details
-        passport = input("Passport number: ").strip()
+        passport = input("Passport number: ").strip().upper()
         first = input("First name: ").strip().title()
         last = input("Last name: ").strip().title()
         price = SEAT_PRICES[get_seat_type(seat)]
         confirm = input(f"Price: ${price} ({get_seat_type(seat)} seat). Confirm? (Y/N): ").upper()
         
-        if confirm == "N":
+        if confirm == "Y":
+            ref = generate_booking_ref()
+            cursor.execute('''
+                INSERT INTO bookings 
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (ref, passport, first, last, seat, price))
+            conn.commit()
+            print(f"Booked {seat}! Reference: {ref}")
             break
-        # Generate reference and save to DB
-        ref = generate_booking_ref()
-        cursor.execute('''
-            INSERT INTO bookings 
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (ref, passport, first, last, seat, price))
-        conn.commit()
-        print(f"Booked {seat}! Reference: {ref}")
-        break
-        
+        else:
+            print("No Booking Made")
+            return;
 
             
 #Function that frees a seat, ultimately canceling a booking            
 def free_seat():
     while True:
-        seat = input("\nEnter seat to free: ").upper()
+        seat = input("\nEnter seat to free (e.g., 1A): ").upper().strip()
+        last_name = input("Enter your last name: ").strip().title()  # Format name
+        passport = input("Enter your passport number: ").strip().upper()
         
-        # Delete from database
-        cursor.execute('DELETE FROM bookings WHERE seat = ?', (seat,))
+        # delete with authentication
+        cursor.execute('''
+            DELETE FROM bookings 
+            WHERE seat = ? 
+            AND UPPER(last_name) = UPPER(?) 
+            AND passport = ?
+        ''', (seat, last_name, passport))
+        
         if cursor.rowcount == 0:
-            print("Seat not booked or invalid.")
-            continue
+            print("No booking found matching:")
+            print(f"- Seat: {seat}")
+            print(f"- Last Name: {last_name}")
+            print(f"- Passport: {passport}\n")
+            break
         
         conn.commit()
-        print(f"Freed {seat} successfully.")
+        print(f"Successfully freed seat {seat}!")
         break
-
 # Function that shows the booking status of a customer, and prints the seating plan
 def show_booking_status():
     # Get passenger's full name
