@@ -216,6 +216,7 @@ def show_booking_status():
     # Create small colored squares for the legend visually
     tk.Label(legend_frame, text="Legend:", anchor='w').pack(side=tk.LEFT, padx=5)
     tk.Label(legend_frame, text="Avail", bg=COLOR_AVAILABLE, fg=COLOR_TEXT_AVAILABLE, relief=tk.RIDGE, borderwidth=1, width=4).pack(side=tk.LEFT, padx=2)
+    tk.Label(legend_frame, text="X", bg=COLOR_AVAILABLE, fg=COLOR_TEXT_AVAILABLE, relief=tk.RIDGE, borderwidth=1, width=4).pack(side=tk.LEFT, padx=2)
     tk.Label(legend_frame, text="R", bg=COLOR_RESERVED, fg=COLOR_TEXT_RESERVED, relief=tk.RIDGE, borderwidth=1, width=4).pack(side=tk.LEFT, padx=2)
     tk.Label(legend_frame, text="S", bg=COLOR_STORAGE, fg=COLOR_TEXT_STORAGE, relief=tk.RIDGE, borderwidth=1, width=4).pack(side=tk.LEFT, padx=2)
 
