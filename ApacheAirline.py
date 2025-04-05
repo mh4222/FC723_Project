@@ -97,6 +97,7 @@ def book_seat():
 
     # Proceed with booking if seats are available
     while True:
+        show_booking_display()
         seat = input("\nEnter seat to book (Window: 50$, Aisle: 40$, Middle: 30$) (eg. 1F) or * for main menu: ").upper()
         if seat == "*":
             return  
@@ -129,6 +130,7 @@ def book_seat():
             ''', (ref, passport, first, last, seat, price))
             conn.commit()
             print(f"Booked {seat}! Reference: {ref}")
+            show_booking_display()
             break
         else:
             print("No Booking Made")
@@ -138,6 +140,7 @@ def book_seat():
 #Function that frees a seat, ultimately canceling a booking            
 def free_seat():
     while True:
+        show_booking_display()
         seat = input("\nEnter seat to free (e.g., 1A) or * for main menu: ").upper().strip()
         if (seat == "*"):
             return
@@ -160,6 +163,7 @@ def free_seat():
             break
         
         conn.commit()
+        show_booking_display()
         print(f"Successfully freed seat {seat}!")
         break
 # Function that shows the booking status of a customer, and prints the GUI seating plan
@@ -195,8 +199,10 @@ def show_booking_status():
             print(f"    Passport:  {passport}") 
             print("-" * 20) # Separator between multiple bookings for same person
     print("-" * 40) # Separator
+    show_booking_display()
 
-    # Prepare for GUI Map 
+def show_booking_display():
+      # Prepare for GUI Map 
     # Display full seat map title in CONSOLE
     print("\nLoading Seat Map...")
 
@@ -291,7 +297,7 @@ def show_booking_status():
     print("Displaying graphical seat map...") # Inform user GUI is opening
     gui_root.mainloop()
     print("Seat map window closed.") # Inform user GUI is closed
-
+    
 # Menu System that is ran at every iteration 
 def menu():
     print("\n| Apache Airlines Booking System |")
